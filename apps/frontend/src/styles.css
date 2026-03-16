@@ -1,0 +1,112 @@
+:root {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #1f2937;
+  background: linear-gradient(180deg, #f5f7fb 0%, #e8eef6 100%);
+}
+
+body {
+  margin: 0;
+}
+
+.layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.gap {
+  gap: 12px;
+}
+
+.between {
+  justify-content: space-between;
+}
+
+.cards {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+  min-width: 240px;
+}
+
+.card-link {
+  text-align: left;
+  min-height: 140px;
+  width: 100%;
+  max-width: 250px;
+}
+
+.card-link p {
+  font-size: 24px;
+  margin: 6px 0;
+}
+
+.card-link small {
+  color: #6b7280;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.detail-table th,
+.detail-table td {
+  border: 1px solid #d7dde8;
+  padding: 8px;
+  text-align: left;
+}
+
+.detail-table th {
+  background: #f2f6fb;
+}
+
+input,
+select,
+button {
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #c4cedc;
+  margin-right: 8px;
+}
+
+button {
+  background: #0f4c81;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0b3f6a;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.success {
+  color: #047857;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    padding: 12px;
+  }
+}

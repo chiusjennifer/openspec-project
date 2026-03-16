@@ -1,0 +1,69 @@
+schema: spec-driven
+
+context: |
+  專案名稱：出缺勤管理系統（Web MVP）
+  領域範圍：
+  - 員工出勤打卡（上班／下班）
+  - 請假申請（年假、補休）
+  - 加班申請
+  - 簽核流程與代理簽核制度
+  - 管理者建立帳號時寄送開通信件
+
+  產品範圍：
+  - 主要角色為管理者（admin）與一般員工（employee）
+  - 管理者可新增／修改／刪除使用者
+  - 新增使用者後寄送臨時密碼，首次登入需重設密碼
+  - 目前階段採單層簽核流程
+  - 本機開發以前後端在主機執行，PostgreSQL 與 pgAdmin 以 Docker 啟動
+
+  技術堆疊：
+  - Monorepo（npm workspaces）
+  - 前端：React 18 + Vite + TypeScript + React Router
+  - 後端：Node.js + Express 4 + TypeScript
+  - 資料庫：PostgreSQL 16
+  - 郵件：Nodemailer + SMTP（本機可使用 MailHog 測試）
+  - 驗證與授權：JWT + bcrypt 密碼雜湊
+  - 驗證：Zod（環境變數與請求驗證）
+  - 測試：Vitest + Supertest（後端 API／整合測試）
+  - 容器化：Docker Compose（postgres、pgAdmin、mailhog；前後端容器可選）
+
+  儲存庫慣例：
+  - apps/frontend：React 前端
+  - apps/backend：Express API、migrations、seeds
+  - openspec/specs：目前啟用中的能力規格
+  - openspec/changes/archive：已封存的變更提案與文件
+  - 前後端統一使用 TypeScript
+  - 後端資料庫異動必須透過 migration scripts
+  - API 路由依領域模組分組（auth、users、attendance、leave、overtime、approvals、delegations）
+
+  維運慣例：
+  - 必填環境變數於啟動時驗證
+  - 簽核決策與餘額更新使用交易（transaction）確保一致性
+  - 狀態流程需明確：submitted、approved、rejected、cancelled
+  - 優先使用 Docker Compose 提供可重現的本機環境
+
+rules:
+  proposal:
+    - 章節順序固定為：Why、What Changes、Capabilities、Impact。
+    - 必須明確列出 New Capabilities 與 Modified Capabilities。
+    - 範圍需符合目前 MVP 邊界（單層簽核、Web-only、固定班別）。
+    - 若有影響，需說明前端、後端、資料庫與 Docker 執行面的變更。
+
+  design:
+    - 需包含：Context、Goals/Non-Goals、Decisions、Risks/Trade-offs、Migration Plan、Open Questions。
+    - 每個主要決策都需提供決策理由，並至少列出一個被捨棄的替代方案。
+    - 需記錄資料一致性與安全性影響（auth、臨時密碼、簽核與餘額完整性）。
+    - 設計內容需以 React + Express + PostgreSQL 的實作導向為主。
+
+  spec:
+    - 以 Purpose 開頭，再依需求使用 ADDED/MODIFIED/REMOVED Requirements 區塊。
+    - 每條需求必須使用 "The system SHALL ..." 句型。
+    - 每條需求至少包含一個使用 WHEN/THEN 的 Scenario。
+    - 能力邊界需清楚（attendance、leave/overtime、approval/delegation、user provisioning、runtime stack）。
+    - 行為定義必須精確到可由 API 與 UI 流程驗證。
+
+  tasks:
+    - 使用分階段編號與核取方塊格式（"- [ ]"），並維持穩定編號（例如 1.1、1.2）。
+    - 任務需涵蓋完整流程：schema/migrations、backend APIs、frontend pages、tests、runbook/docs。
+    - 任務描述需可直接執行，避免抽象敘述。
+    - 僅在程式、測試與基本 smoke 驗證完成後，才能將任務標記為完成。

@@ -1,4 +1,4 @@
-﻿import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { apiRequest, Session } from "./api";
 
@@ -99,7 +99,7 @@ function LoginPanel({ onLoggedIn, onMessage, message }: { onLoggedIn: (session: 
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-      notify(onMessage, "success", "Login successful");
+      notify(onMessage, "success", "登入成功");
       onLoggedIn(session);
     } catch (error) {
       notify(onMessage, "error", (error as Error).message);
@@ -128,7 +128,7 @@ function LoginPanel({ onLoggedIn, onMessage, message }: { onLoggedIn: (session: 
         method: "POST",
         body: JSON.stringify({ token: resetToken, newPassword })
       });
-      notify(onMessage, "success", "Password reset completed");
+      notify(onMessage, "success", "密碼重設完成");
       const url = new URL(window.location.href);
       url.searchParams.delete("resetToken");
       window.history.replaceState({}, "", url.pathname + url.search);
@@ -141,50 +141,50 @@ function LoginPanel({ onLoggedIn, onMessage, message }: { onLoggedIn: (session: 
   return (
     <main className="layout auth-layout">
       <section className="auth-hero">
-        <h1 className="brand-title">Attendance Management System</h1>
-        <p className="brand-subtitle">Handle attendance, leave, overtime, and approvals in one place.</p>
+        <h1 className="brand-title">出勤管理系統</h1>
+        <p className="brand-subtitle">整合出勤、請假、加班與簽核流程，一站式管理。</p>
       </section>
       {mode === "login" && (
         <form className="card auth-card" onSubmit={submitLogin}>
-          <h2>Login</h2>
+          <h2>登入</h2>
           <label className="field">
-            <span>Email</span>
+            <span>電子郵件</span>
             <input autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </label>
           <label className="field">
-            <span>Password</span>
+            <span>密碼</span>
             <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </label>
-          <button className="primary-btn wide-btn" type="submit">Login</button>
-          <button className="link-btn" type="button" onClick={() => switchMode("forgot")}>Forgot password?</button>
+          <button className="primary-btn wide-btn" type="submit">登入</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("forgot")}>忘記密碼？</button>
           {message && <p className={"inline-message " + message.type}>{message.text}</p>}
         </form>
       )}
       {mode === "forgot" && (
         <form className="card auth-card" onSubmit={submitForgotPassword}>
-          <h2>Forgot Password</h2>
+          <h2>忘記密碼</h2>
           <label className="field">
-            <span>Email</span>
+            <span>電子郵件</span>
             <input autoComplete="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required />
           </label>
-          <button className="primary-btn wide-btn" type="submit">Send reset link</button>
-          <button className="link-btn" type="button" onClick={() => switchMode("login")}>Back to login</button>
+          <button className="primary-btn wide-btn" type="submit">寄送重設連結</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("login")}>返回登入</button>
           {message && <p className={"inline-message " + message.type}>{message.text}</p>}
         </form>
       )}
       {mode === "reset" && (
         <form className="card auth-card" onSubmit={submitResetByToken}>
-          <h2>Reset Password</h2>
+          <h2>重設密碼</h2>
           <label className="field">
-            <span>Reset Token</span>
+            <span>重設驗證碼</span>
             <input value={resetToken} onChange={(e) => setResetToken(e.target.value)} required />
           </label>
           <label className="field">
-            <span>New password</span>
+            <span>新密碼</span>
             <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
           </label>
-          <button className="primary-btn wide-btn" type="submit">Complete reset</button>
-          <button className="link-btn" type="button" onClick={() => switchMode("login")}>Back to login</button>
+          <button className="primary-btn wide-btn" type="submit">完成重設</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("login")}>返回登入</button>
           {message && <p className={"inline-message " + message.type}>{message.text}</p>}
         </form>
       )}
@@ -257,15 +257,13 @@ function Dashboard({ session, onLogout, onMessage, message }: { session: Session
       };
 
       if (isAdmin) {
-        next.users = await apiRequest<any[]>("/users", {}, session.token);
+        next.pendingApprovals = await apiRequest<any[]>("/approvals/pending", {}, session.token);
+      } else {
+        next.leaveRequests = await apiRequest<any[]>("/leave-requests", {}, session.token);
+        next.overtimeRequests = await apiRequest<any[]>("/overtime-requests", {}, session.token);
+        const today = new Date().toISOString().slice(0, 10);
+        next.attendance = await apiRequest<any[]>(`/attendance?startDate=${today}&endDate=${today}`, {}, session.token);
       }
-
-      const today = new Date().toISOString().slice(0, 10);
-      next.attendance = await apiRequest<any[]>(`/attendance?startDate=${today}&endDate=${today}`, {}, session.token);
-      next.leaveRequests = await apiRequest<any[]>("/leave-requests", {}, session.token);
-      next.overtimeRequests = await apiRequest<any[]>("/overtime-requests", {}, session.token);
-      next.pendingApprovals = await apiRequest<any[]>("/approvals/pending", {}, session.token);
-      next.delegations = await apiRequest<any[]>("/delegations", {}, session.token);
 
       setData(next);
     } catch (error) {
@@ -316,38 +314,43 @@ function Dashboard({ session, onLogout, onMessage, message }: { session: Session
         </div>
       </header>
 
-      <section className="stats-grid">
-        <button className="card card-link metric-card" onClick={() => openDetail("attendance")}>
-          <h3>打卡紀錄</h3>
-          <p>{stats.attendance}</p>
-          <small>點擊查看明細</small>
-        </button>
-        <button className="card card-link metric-card" onClick={() => openDetail("leave")}>
-          <h3>請假</h3>
-          <p>{stats.leave}</p>
-          <small>點擊查看明細</small>
-        </button>
-        <button className="card card-link metric-card" onClick={() => openDetail("overtime")}>
-          <h3>加班</h3>
-          <p>{stats.overtime}</p>
-          <small>點擊查看明細</small>
-        </button>
-        <button className="card card-link metric-card" onClick={() => openDetail("approvals")}>
-          <h3>待簽核</h3>
-          <p>{stats.approvals}</p>
-          <small>點擊查看明細</small>
-        </button>
-      </section>
+      {isAdmin ? (
+        <section className="stats-grid">
+          <button className="card card-link metric-card" onClick={() => openDetail("approvals")}>
+            <h3>待簽核</h3>
+            <p>{stats.approvals}</p>
+            <small>點擊查看明細</small>
+          </button>
+        </section>
+      ) : (
+        <>
+          <section className="stats-grid">
+            <button className="card card-link metric-card" onClick={() => openDetail("attendance")}>
+              <h3>打卡紀錄</h3>
+              <p>{stats.attendance}</p>
+              <small>點擊查看明細</small>
+            </button>
+            <button className="card card-link metric-card" onClick={() => openDetail("leave")}>
+              <h3>請假</h3>
+              <p>{stats.leave}</p>
+              <small>點擊查看明細</small>
+            </button>
+            <button className="card card-link metric-card" onClick={() => openDetail("overtime")}>
+              <h3>加班</h3>
+              <p>{stats.overtime}</p>
+              <small>點擊查看明細</small>
+            </button>
+          </section>
 
-      <section className="row gap wrap quick-actions">
-        <button className="primary-btn" onClick={clockIn}>上班打卡</button>
-        <button className="secondary-btn" onClick={clockOut}>下班打卡</button>
-      </section>
+          <section className="row gap wrap quick-actions">
+            <button className="primary-btn" onClick={clockIn}>上班打卡</button>
+            <button className="secondary-btn" onClick={clockOut}>下班打卡</button>
+          </section>
+        </>
+      )}
 
-      {isAdmin && <AdminPanel token={session.token} users={data.users} onMessage={onMessage} onSaved={loadAll} />}
-      <RequestPanels token={session.token} onMessage={onMessage} onSaved={loadAll} />
-      <ApprovalsPanel token={session.token} pending={data.pendingApprovals} onMessage={onMessage} onSaved={loadAll} />
-      <DelegationPanel token={session.token} delegations={data.delegations} users={data.users} onMessage={onMessage} onSaved={loadAll} />
+      {!isAdmin && <RequestPanels token={session.token} onMessage={onMessage} onSaved={loadAll} />}
+      {isAdmin && <ApprovalsPanel token={session.token} pending={data.pendingApprovals} onMessage={onMessage} onSaved={loadAll} />}
 
       {message && <p className={`inline-message ${message.type}`}>{message.text}</p>}
     </main>
@@ -460,23 +463,36 @@ function DetailTable({ type, rows }: { type: DetailType; rows: any[] }) {
   );
 }
 
-function AdminPanel({ token, users, onMessage, onSaved }: { token: string; users: any[]; onMessage: (message: Message) => void; onSaved: () => Promise<void> }) {
+function AdminPanel({ token, users, onMessage, onSaved, message }: { token: string; users: any[]; onMessage: (message: Message) => void; onSaved: () => Promise<void>; message: Message }) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [roleName, setRoleName] = useState<"admin" | "employee">("employee");
   const [approverId, setApproverId] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const approverCandidates = useMemo(
+    () => users.filter((user) => user.id && user.is_active !== false),
+    [users]
+  );
 
   const createUser = async (event: FormEvent) => {
     event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     try {
-      await apiRequest("/users", { method: "POST", body: JSON.stringify({ email, fullName, roleName, approverId: approverId || undefined }) }, token);
-      notify(onMessage, "success", "使用者建立成功，已寄送臨時密碼信件");
+      const result = await apiRequest<{ message?: string }>(
+        "/users",
+        { method: "POST", body: JSON.stringify({ email, fullName, roleName, approverId: approverId || undefined }) },
+        token
+      );
+      notify(onMessage, "success", result.message ?? "使用者建立成功，已寄送臨時密碼信件");
       setEmail("");
       setFullName("");
       setApproverId("");
       await onSaved();
     } catch (error) {
       notify(onMessage, "error", (error as Error).message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -490,9 +506,15 @@ function AdminPanel({ token, users, onMessage, onSaved }: { token: string; users
           <option value="employee">一般使用者</option>
           <option value="admin">管理者</option>
         </select>
-        <input placeholder="簽核者 ID（選填）" value={approverId} onChange={(e) => setApproverId(e.target.value)} />
-        <button className="primary-btn" type="submit">新增使用者</button>
+        <select value={approverId} onChange={(e) => setApproverId(e.target.value)}>
+          <option value="">簽核者（選填）</option>
+          {approverCandidates.map((user) => (
+            <option key={user.id} value={user.id}>{user.full_name} ({user.email})</option>
+          ))}
+        </select>
+        <button className="primary-btn" type="submit" disabled={submitting}>{submitting ? "新增中..." : "新增使用者"}</button>
       </form>
+      {message && <p className={`inline-message ${message.type}`}>{message.text}</p>}
       <ul className="item-list">{users.map((user) => <li key={user.id}>{user.full_name} ({user.email}) - {roleLabel(user.role_name)}</li>)}</ul>
     </section>
   );
@@ -512,6 +534,10 @@ function RequestPanels({ token, onMessage, onSaved }: { token: string; onMessage
     event.preventDefault();
     try {
       await apiRequest("/leave-requests", { method: "POST", body: JSON.stringify({ leaveType, startAt: leaveStart, endAt: leaveEnd, reason: leaveReason }) }, token);
+      setLeaveType("annual");
+      setLeaveStart("");
+      setLeaveEnd("");
+      setLeaveReason("");
       notify(onMessage, "success", "請假申請已送出");
       await onSaved();
     } catch (error) {
@@ -523,6 +549,9 @@ function RequestPanels({ token, onMessage, onSaved }: { token: string; onMessage
     event.preventDefault();
     try {
       await apiRequest("/overtime-requests", { method: "POST", body: JSON.stringify({ startAt: otStart, endAt: otEnd, reason: otReason }) }, token);
+      setOtStart("");
+      setOtEnd("");
+      setOtReason("");
       notify(onMessage, "success", "加班申請已送出");
       await onSaved();
     } catch (error) {

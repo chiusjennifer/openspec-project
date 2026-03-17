@@ -6,7 +6,7 @@ import { resolveApprover } from "../services/approver.js";
 
 export const leaveRouter = Router();
 
-leaveRouter.post("/", requireRole("employee", "admin"), async (req, res) => {
+leaveRouter.post("/", requireRole("employee"), async (req, res) => {
   const { leaveType, startAt, endAt, reason } = req.body as {
     leaveType?: "annual" | "compensatory";
     startAt?: string;
@@ -27,6 +27,10 @@ leaveRouter.post("/", requireRole("employee", "admin"), async (req, res) => {
   }
 
   const approverId = await resolveApprover(req.user!.id, startAt.slice(0, 10));
+  if (!approverId) {
+    res.status(400).json({ message: "No admin approver available" });
+    return;
+  }
 
   const result = await query(
     `INSERT INTO leave_requests(user_id, leave_type, start_at, end_at, reason, status, approver_id)

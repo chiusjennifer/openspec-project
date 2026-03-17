@@ -37,7 +37,11 @@ usersRouter.post("/", requireRole("admin"), async (req, res) => {
     approverId?: string;
   };
 
-  if (!email || !fullName || !roleName) {
+  const normalizedEmail = email?.trim();
+  const normalizedFullName = fullName?.trim();
+  const normalizedApproverId = approverId?.trim();
+
+  if (!normalizedEmail || !normalizedFullName || !roleName) {
     res.status(400).json({ message: "email, fullName, roleName are required" });
     return;
   }
@@ -46,40 +50,82 @@ usersRouter.post("/", requireRole("admin"), async (req, res) => {
   const passwordHash = await hashPassword(tempPassword);
   const tempExpiry = new Date(Date.now() + env.TEMP_PASSWORD_EXPIRES_HOURS * 60 * 60 * 1000).toISOString();
 
-  const user = await withTransaction(async (client) => {
-    const role = await client.query<{ id: string }>("SELECT id FROM roles WHERE name = $1", [roleName]);
-    if (!role.rows[0]) {
-      throw new Error("Role not found");
-    }
+  let user: { id: string; email: string; full_name: string };
+  try {
+    user = await withTransaction(async (client) => {
+      const role = await client.query<{ id: string }>("SELECT id FROM roles WHERE name = $1", [roleName]);
+      if (!role.rows[0]) {
+        throw new Error("Role not found");
+      }
 
-    const created = await client.query<{ id: string; email: string; full_name: string }>(
-      `INSERT INTO users(email, full_name, password_hash, role_id, must_reset_password, temp_password_expires_at)
-       VALUES($1, $2, $3, $4, TRUE, $5)
-       RETURNING id, email, full_name`,
-      [email, fullName, passwordHash, role.rows[0].id, tempExpiry]
-    );
-
-    await client.query(
-      `INSERT INTO leave_balances(user_id, annual_minutes, compensatory_minutes)
-       VALUES($1, 0, 0)
-       ON CONFLICT(user_id) DO NOTHING`,
-      [created.rows[0].id]
-    );
-
-    if (approverId) {
-      await client.query(
-        `INSERT INTO user_approvers(user_id, approver_id)
-         VALUES($1, $2)
-         ON CONFLICT(user_id) DO UPDATE SET approver_id = EXCLUDED.approver_id`,
-        [created.rows[0].id, approverId]
+      const created = await client.query<{ id: string; email: string; full_name: string }>(
+        `INSERT INTO users(email, full_name, password_hash, role_id, must_reset_password, temp_password_expires_at)
+         VALUES($1, $2, $3, $4, TRUE, $5)
+         RETURNING id, email, full_name`,
+        [normalizedEmail, normalizedFullName, passwordHash, role.rows[0].id, tempExpiry]
       );
+
+      await client.query(
+        `INSERT INTO leave_balances(user_id, annual_minutes, compensatory_minutes)
+         VALUES($1, 0, 0)
+         ON CONFLICT(user_id) DO NOTHING`,
+        [created.rows[0].id]
+      );
+
+      if (normalizedApproverId) {
+        const approver = await client.query<{ id: string }>(
+          "SELECT id FROM users WHERE id = $1 AND is_active = TRUE LIMIT 1",
+          [normalizedApproverId]
+        );
+        if (!approver.rows[0]) {
+          throw new Error("Approver not found");
+        }
+
+        await client.query(
+          `INSERT INTO user_approvers(user_id, approver_id)
+           VALUES($1, $2)
+           ON CONFLICT(user_id) DO UPDATE SET approver_id = EXCLUDED.approver_id`,
+          [created.rows[0].id, normalizedApproverId]
+        );
+      }
+
+      return created.rows[0];
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Role not found") {
+      res.status(400).json({ message: "角色不存在" });
+      return;
+    }
+    if (error instanceof Error && error.message === "Approver not found") {
+      res.status(400).json({ message: "簽核者不存在或已停用" });
+      return;
     }
 
-    return created.rows[0];
-  });
+    const code = (error as { code?: string }).code;
+    if (code === "22P02") {
+      res.status(400).json({ message: "簽核者格式不正確" });
+      return;
+    }
+    if (code === "23505") {
+      res.status(409).json({ message: "此電子郵件已存在" });
+      return;
+    }
+    console.error("Create user failed", error);
+    res.status(500).json({ message: "新增使用者失敗，請稍後再試" });
+    return;
+  }
 
-  await sendTemporaryPasswordEmail(email, tempPassword);
-  res.status(201).json(user);
+  let emailSent = true;
+  let message = "使用者建立成功，已寄送臨時密碼信件";
+  try {
+    await sendTemporaryPasswordEmail(normalizedEmail, tempPassword);
+  } catch (error) {
+    emailSent = false;
+    message = "使用者已建立，但臨時密碼信件寄送失敗，請稍後重試寄送";
+    console.error("Failed to send temporary password email", error);
+  }
+
+  res.status(201).json({ ...user, emailSent, message });
 });
 
 usersRouter.patch("/:id", requireRole("admin"), async (req, res) => {

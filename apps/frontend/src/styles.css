@@ -60,6 +60,7 @@ p {
   min-height: 100dvh;
   display: grid;
   place-content: center;
+  justify-items: center;
   gap: 20px;
 }
 

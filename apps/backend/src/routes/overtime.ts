@@ -8,7 +8,7 @@ export const overtimeRouter = Router();
 
 const COMP_OFF_DIVISOR = 60;
 
-overtimeRouter.post("/", requireRole("employee", "admin"), async (req, res) => {
+overtimeRouter.post("/", requireRole("employee"), async (req, res) => {
   const { startAt, endAt, reason } = req.body as { startAt?: string; endAt?: string; reason?: string };
   if (!startAt || !endAt || !reason) {
     res.status(400).json({ message: "startAt, endAt, reason are required" });
@@ -23,6 +23,10 @@ overtimeRouter.post("/", requireRole("employee", "admin"), async (req, res) => {
   }
 
   const approverId = await resolveApprover(req.user!.id, startAt.slice(0, 10));
+  if (!approverId) {
+    res.status(400).json({ message: "No admin approver available" });
+    return;
+  }
 
   const result = await query(
     `INSERT INTO overtime_requests(user_id, start_at, end_at, reason, status, approver_id)

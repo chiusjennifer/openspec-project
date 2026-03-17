@@ -1,13 +1,17 @@
 import { query } from "../db/client.js";
 
 export async function resolveApprover(userId: string, referenceDate: string): Promise<string | null> {
-  const baseResult = await query<{ approver_id: string | null }>(
-    `SELECT approver_id FROM user_approvers WHERE user_id = $1 LIMIT 1`,
-    [userId]
+  const adminResult = await query<{ id: string }>(
+    `SELECT u.id
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE r.name = 'admin'
+       AND u.is_active = TRUE
+     ORDER BY u.created_at ASC
+     LIMIT 1`
   );
-
-  const baseApproverId = baseResult.rows[0]?.approver_id ?? null;
-  if (!baseApproverId) {
+  const baseApproverId = adminResult.rows[0]?.id ?? null;
+  if (!baseApproverId || baseApproverId === userId) {
     return null;
   }
 

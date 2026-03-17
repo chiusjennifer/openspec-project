@@ -7,7 +7,7 @@ import { applyAttendanceCorrectionDecision } from "./attendance-corrections.js";
 
 export const approvalsRouter = Router();
 
-approvalsRouter.get("/pending", requireRole("employee", "admin"), async (req, res) => {
+approvalsRouter.get("/pending", requireRole("admin"), async (req, res) => {
   const leave = await query(
     `SELECT 'leave' AS type, id, user_id, start_at, end_at, reason, status, created_at
      FROM leave_requests
@@ -42,7 +42,7 @@ approvalsRouter.get("/pending", requireRole("employee", "admin"), async (req, re
   res.json([...leave.rows, ...overtime.rows, ...corrections.rows]);
 });
 
-approvalsRouter.post("/leave/:id/decision", requireRole("employee", "admin"), async (req, res) => {
+approvalsRouter.post("/leave/:id/decision", requireRole("admin"), async (req, res) => {
   const { decision, comment } = req.body as { decision?: "approved" | "rejected"; comment?: string };
   if (!decision) {
     res.status(400).json({ message: "decision is required" });
@@ -63,7 +63,7 @@ approvalsRouter.post("/leave/:id/decision", requireRole("employee", "admin"), as
   res.json({ message: "Leave request decision recorded" });
 });
 
-approvalsRouter.post("/overtime/:id/decision", requireRole("employee", "admin"), async (req, res) => {
+approvalsRouter.post("/overtime/:id/decision", requireRole("admin"), async (req, res) => {
   const { decision, comment } = req.body as { decision?: "approved" | "rejected"; comment?: string };
   if (!decision) {
     res.status(400).json({ message: "decision is required" });
@@ -84,7 +84,7 @@ approvalsRouter.post("/overtime/:id/decision", requireRole("employee", "admin"),
   res.json({ message: "Overtime request decision recorded" });
 });
 
-approvalsRouter.post("/attendance-corrections/:id/decision", requireRole("employee", "admin"), async (req, res) => {
+approvalsRouter.post("/attendance-corrections/:id/decision", requireRole("admin"), async (req, res) => {
   const { decision, comment } = req.body as { decision?: "approved" | "rejected"; comment?: string };
   if (!decision) {
     res.status(400).json({ message: "decision is required" });

@@ -20,3 +20,17 @@ export async function sendTemporaryPasswordEmail(email: string, temporaryPasswor
     ].join("\n")
   });
 }
+
+export async function sendPasswordResetEmail(email: string, resetLink: string, expiresMinutes: number): Promise<void> {
+  await transporter.sendMail({
+    from: env.SMTP_FROM,
+    to: email,
+    subject: "Password reset request",
+    text: [
+      "We received a password reset request for your account.",
+      `Reset link: ${resetLink}`,
+      `This link will expire in ${expiresMinutes} minutes.`,
+      "If you did not request this, you can ignore this email."
+    ].join("\n")
+  });
+}

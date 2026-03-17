@@ -16,7 +16,6 @@ type DashboardData = {
 
 function notify(onMessage: (message: Message) => void, type: "error" | "success", text: string) {
   onMessage({ type, text });
-  window.alert(text);
 }
 
 function roleLabel(role: string): string {
@@ -26,18 +25,25 @@ function roleLabel(role: string): string {
 }
 
 function useSession() {
-  const [session, setSession] = useState<Session | null>(() => {
+  const [session, setSessionState] = useState<Session | null>(() => {
     const raw = localStorage.getItem("session");
-    return raw ? (JSON.parse(raw) as Session) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as Session;
+    } catch {
+      localStorage.removeItem("session");
+      return null;
+    }
   });
 
-  useEffect(() => {
-    if (session) {
-      localStorage.setItem("session", JSON.stringify(session));
+  const setSession = (next: Session | null) => {
+    setSessionState(next);
+    if (next) {
+      localStorage.setItem("session", JSON.stringify(next));
     } else {
       localStorage.removeItem("session");
     }
-  }, [session]);
+  };
 
   return { session, setSession };
 }
@@ -45,6 +51,12 @@ function useSession() {
 export function App() {
   const { session, setSession } = useSession();
   const [message, setMessage] = useState<Message>(null);
+
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   if (!session) {
     return <LoginPanel onLoggedIn={setSession} onMessage={setMessage} message={message} />;
@@ -66,15 +78,60 @@ export function App() {
 function LoginPanel({ onLoggedIn, onMessage, message }: { onLoggedIn: (session: Session) => void; onMessage: (message: Message) => void; message: Message }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetToken, setResetToken] = useState(() => new URLSearchParams(window.location.search).get("resetToken") ?? "");
+  const [newPassword, setNewPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "forgot" | "reset">(() => (new URLSearchParams(window.location.search).get("resetToken") ? "reset" : "login"));
 
-  const submit = async (event: FormEvent) => {
+  const switchMode = (next: "login" | "forgot" | "reset") => {
+    setMode(next);
+    if (next !== "reset") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resetToken");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  };
+
+  const submitLogin = async (event: FormEvent) => {
     event.preventDefault();
     try {
       const session = await apiRequest<Session>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-      notify(onMessage, "success", "登入成功");
+      notify(onMessage, "success", "Login successful");
+      onLoggedIn(session);
+    } catch (error) {
+      notify(onMessage, "error", (error as Error).message);
+    }
+  };
+
+  const submitForgotPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const response = await apiRequest<{ message: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      notify(onMessage, "success", response.message);
+      setForgotEmail("");
+      switchMode("login");
+    } catch (error) {
+      notify(onMessage, "error", (error as Error).message);
+    }
+  };
+
+  const submitResetByToken = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      const session = await apiRequest<Session>("/auth/reset-password-by-token", {
+        method: "POST",
+        body: JSON.stringify({ token: resetToken, newPassword })
+      });
+      notify(onMessage, "success", "Password reset completed");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resetToken");
+      window.history.replaceState({}, "", url.pathname + url.search);
       onLoggedIn(session);
     } catch (error) {
       notify(onMessage, "error", (error as Error).message);
@@ -82,15 +139,55 @@ function LoginPanel({ onLoggedIn, onMessage, message }: { onLoggedIn: (session: 
   };
 
   return (
-    <main className="layout">
-      <h1>出缺勤管理系統</h1>
-      <form className="card" onSubmit={submit}>
-        <h2>登入</h2>
-        <label>電子郵件<input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-        <label>密碼<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <button type="submit">登入</button>
-        {message && <p className={message.type}>{message.text}</p>}
-      </form>
+    <main className="layout auth-layout">
+      <section className="auth-hero">
+        <h1 className="brand-title">Attendance Management System</h1>
+        <p className="brand-subtitle">Handle attendance, leave, overtime, and approvals in one place.</p>
+      </section>
+      {mode === "login" && (
+        <form className="card auth-card" onSubmit={submitLogin}>
+          <h2>Login</h2>
+          <label className="field">
+            <span>Email</span>
+            <input autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </label>
+          <button className="primary-btn wide-btn" type="submit">Login</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("forgot")}>Forgot password?</button>
+          {message && <p className={"inline-message " + message.type}>{message.text}</p>}
+        </form>
+      )}
+      {mode === "forgot" && (
+        <form className="card auth-card" onSubmit={submitForgotPassword}>
+          <h2>Forgot Password</h2>
+          <label className="field">
+            <span>Email</span>
+            <input autoComplete="email" value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} required />
+          </label>
+          <button className="primary-btn wide-btn" type="submit">Send reset link</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("login")}>Back to login</button>
+          {message && <p className={"inline-message " + message.type}>{message.text}</p>}
+        </form>
+      )}
+      {mode === "reset" && (
+        <form className="card auth-card" onSubmit={submitResetByToken}>
+          <h2>Reset Password</h2>
+          <label className="field">
+            <span>Reset Token</span>
+            <input value={resetToken} onChange={(e) => setResetToken(e.target.value)} required />
+          </label>
+          <label className="field">
+            <span>New password</span>
+            <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+          </label>
+          <button className="primary-btn wide-btn" type="submit">Complete reset</button>
+          <button className="link-btn" type="button" onClick={() => switchMode("login")}>Back to login</button>
+          {message && <p className={"inline-message " + message.type}>{message.text}</p>}
+        </form>
+      )}
     </main>
   );
 }
@@ -122,12 +219,15 @@ function ResetPasswordPanel({ session, onLoggedIn, onMessage, message }: { sessi
   };
 
   return (
-    <main className="layout">
-      <form className="card" onSubmit={submit}>
+    <main className="layout auth-layout">
+      <form className="card auth-card" onSubmit={submit}>
         <h2>重設密碼</h2>
-        <label>新密碼<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
-        <button type="submit">送出</button>
-        {message && <p className={message.type}>{message.text}</p>}
+        <label className="field">
+          <span>新密碼</span>
+          <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+        </label>
+        <button className="primary-btn wide-btn" type="submit">送出</button>
+        {message && <p className={`inline-message ${message.type}`}>{message.text}</p>}
       </form>
     </main>
   );
@@ -193,52 +293,55 @@ function Dashboard({ session, onLogout, onMessage, message }: { session: Session
 
   const clockIn = async () => {
     await apiRequest("/attendance/clock-in", { method: "POST", body: JSON.stringify({}) }, session.token);
-    notify(onMessage, "success", "上班打卡成功");
+    notify(onMessage, "success", "上班打卡完成");
     await loadAll();
   };
 
   const clockOut = async () => {
     await apiRequest("/attendance/clock-out", { method: "POST", body: JSON.stringify({}) }, session.token);
-    notify(onMessage, "success", "下班打卡成功");
+    notify(onMessage, "success", "下班打卡完成");
     await loadAll();
   };
 
   return (
-    <main className="layout">
-      <header className="row between">
-        <h1>出缺勤儀表板</h1>
-        <div className="row gap">
-          <button onClick={loadAll}>重新整理</button>
-          <button onClick={onLogout}>登出</button>
+    <main className="layout dashboard-layout">
+      <header className="dashboard-header">
+        <div>
+          <h1>出缺勤儀表板</h1>
+          <p className="muted">歡迎回來，{session.user.email}</p>
+        </div>
+        <div className="row gap wrap">
+          <button className="secondary-btn" onClick={loadAll}>重新整理</button>
+          <button className="ghost-btn" onClick={onLogout}>登出</button>
         </div>
       </header>
 
-      <section className="row cards">
-        <button className="card card-link" onClick={() => openDetail("attendance")}>
+      <section className="stats-grid">
+        <button className="card card-link metric-card" onClick={() => openDetail("attendance")}>
           <h3>打卡紀錄</h3>
           <p>{stats.attendance}</p>
           <small>點擊查看明細</small>
         </button>
-        <button className="card card-link" onClick={() => openDetail("leave")}>
-          <h3>請假單</h3>
+        <button className="card card-link metric-card" onClick={() => openDetail("leave")}>
+          <h3>請假</h3>
           <p>{stats.leave}</p>
           <small>點擊查看明細</small>
         </button>
-        <button className="card card-link" onClick={() => openDetail("overtime")}>
-          <h3>加班單</h3>
+        <button className="card card-link metric-card" onClick={() => openDetail("overtime")}>
+          <h3>加班</h3>
           <p>{stats.overtime}</p>
           <small>點擊查看明細</small>
         </button>
-        <button className="card card-link" onClick={() => openDetail("approvals")}>
+        <button className="card card-link metric-card" onClick={() => openDetail("approvals")}>
           <h3>待簽核</h3>
           <p>{stats.approvals}</p>
           <small>點擊查看明細</small>
         </button>
       </section>
 
-      <section className="row gap wrap">
-        <button onClick={clockIn}>上班打卡</button>
-        <button onClick={clockOut}>下班打卡</button>
+      <section className="row gap wrap quick-actions">
+        <button className="primary-btn" onClick={clockIn}>上班打卡</button>
+        <button className="secondary-btn" onClick={clockOut}>下班打卡</button>
       </section>
 
       {isAdmin && <AdminPanel token={session.token} users={data.users} onMessage={onMessage} onSaved={loadAll} />}
@@ -246,7 +349,7 @@ function Dashboard({ session, onLogout, onMessage, message }: { session: Session
       <ApprovalsPanel token={session.token} pending={data.pendingApprovals} onMessage={onMessage} onSaved={loadAll} />
       <DelegationPanel token={session.token} delegations={data.delegations} users={data.users} onMessage={onMessage} onSaved={loadAll} />
 
-      {message && <p className={message.type}>{message.text}</p>}
+      {message && <p className={`inline-message ${message.type}`}>{message.text}</p>}
     </main>
   );
 }
@@ -306,14 +409,14 @@ function DetailPage({ session }: { session: Session }) {
   if (!validType) return null;
 
   return (
-    <main className="layout">
+    <main className="layout detail-layout">
       <header className="row between">
         <h1>{titleMap[detailType]}</h1>
-        <button onClick={() => window.close()}>關閉分頁</button>
+        <button className="ghost-btn" onClick={() => window.close()}>關閉</button>
       </header>
 
-      {loading && <p>載入中...</p>}
-      {error && <p className="error">{error}</p>}
+      {loading && <p className="muted">載入中...</p>}
+      {error && <p className="inline-message error">{error}</p>}
       {!loading && !error && <DetailTable type={detailType} rows={rows} />}
     </main>
   );
@@ -321,7 +424,7 @@ function DetailPage({ session }: { session: Session }) {
 
 function DetailTable({ type, rows }: { type: DetailType; rows: any[] }) {
   if (!rows.length) {
-    return <p>目前沒有資料。</p>;
+    return <p>目前沒有資料。</p>
   }
 
   const columns: Record<DetailType, string[]> = {
@@ -334,7 +437,7 @@ function DetailTable({ type, rows }: { type: DetailType; rows: any[] }) {
   const headers = columns[type];
 
   return (
-    <div className="card">
+    <div className="card table-wrap">
       <table className="detail-table">
         <thead>
           <tr>
@@ -380,17 +483,17 @@ function AdminPanel({ token, users, onMessage, onSaved }: { token: string; users
   return (
     <section className="card">
       <h2>管理者使用者管理</h2>
-      <form className="row wrap" onSubmit={createUser}>
-        <input placeholder="電子郵件" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input placeholder="姓名" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+      <form className="form-grid" onSubmit={createUser}>
+        <input placeholder="電子郵件" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <input placeholder="姓名" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
         <select value={roleName} onChange={(e) => setRoleName(e.target.value as "admin" | "employee")}>
           <option value="employee">一般使用者</option>
           <option value="admin">管理者</option>
         </select>
         <input placeholder="簽核者 ID（選填）" value={approverId} onChange={(e) => setApproverId(e.target.value)} />
-        <button type="submit">新增使用者</button>
+        <button className="primary-btn" type="submit">新增使用者</button>
       </form>
-      <ul>{users.map((user) => <li key={user.id}>{user.full_name} ({user.email}) - {roleLabel(user.role_name)}</li>)}</ul>
+      <ul className="item-list">{users.map((user) => <li key={user.id}>{user.full_name} ({user.email}) - {roleLabel(user.role_name)}</li>)}</ul>
     </section>
   );
 }
@@ -428,24 +531,24 @@ function RequestPanels({ token, onMessage, onSaved }: { token: string; onMessage
   };
 
   return (
-    <section className="row cards">
-      <form className="card" onSubmit={createLeave}>
+    <section className="request-grid">
+      <form className="card request-card" onSubmit={createLeave}>
         <h2>請假申請</h2>
         <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
           <option value="annual">年假</option>
           <option value="compensatory">補休</option>
         </select>
-        <input placeholder="開始時間（ISO 格式）" value={leaveStart} onChange={(e) => setLeaveStart(e.target.value)} />
-        <input placeholder="結束時間（ISO 格式）" value={leaveEnd} onChange={(e) => setLeaveEnd(e.target.value)} />
-        <input placeholder="請假原因" value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} />
-        <button type="submit">送出請假</button>
+        <input placeholder="開始時間（ISO 格式）" value={leaveStart} onChange={(e) => setLeaveStart(e.target.value)} required />
+        <input placeholder="結束時間（ISO 格式）" value={leaveEnd} onChange={(e) => setLeaveEnd(e.target.value)} required />
+        <input placeholder="請假原因" value={leaveReason} onChange={(e) => setLeaveReason(e.target.value)} required />
+        <button className="primary-btn" type="submit">送出請假</button>
       </form>
-      <form className="card" onSubmit={createOvertime}>
+      <form className="card request-card" onSubmit={createOvertime}>
         <h2>加班申請</h2>
-        <input placeholder="開始時間（ISO 格式）" value={otStart} onChange={(e) => setOtStart(e.target.value)} />
-        <input placeholder="結束時間（ISO 格式）" value={otEnd} onChange={(e) => setOtEnd(e.target.value)} />
-        <input placeholder="加班原因" value={otReason} onChange={(e) => setOtReason(e.target.value)} />
-        <button type="submit">送出加班</button>
+        <input placeholder="開始時間（ISO 格式）" value={otStart} onChange={(e) => setOtStart(e.target.value)} required />
+        <input placeholder="結束時間（ISO 格式）" value={otEnd} onChange={(e) => setOtEnd(e.target.value)} required />
+        <input placeholder="加班原因" value={otReason} onChange={(e) => setOtReason(e.target.value)} required />
+        <button className="primary-btn" type="submit">送出加班</button>
       </form>
     </section>
   );
@@ -454,7 +557,12 @@ function RequestPanels({ token, onMessage, onSaved }: { token: string; onMessage
 function ApprovalsPanel({ token, pending, onMessage, onSaved }: { token: string; pending: any[]; onMessage: (message: Message) => void; onSaved: () => Promise<void> }) {
   const decide = async (item: any, decision: "approved" | "rejected") => {
     try {
-      const path = item.type === "leave" ? `/approvals/leave/${item.id}/decision` : `/approvals/overtime/${item.id}/decision`;
+      const path =
+        item.type === "leave"
+          ? `/approvals/leave/${item.id}/decision`
+          : item.type === "overtime"
+            ? `/approvals/overtime/${item.id}/decision`
+            : `/approvals/attendance-corrections/${item.id}/decision`;
       await apiRequest(path, { method: "POST", body: JSON.stringify({ decision }) }, token);
       notify(onMessage, "success", `申請已${decision === "approved" ? "核准" : "駁回"}`);
       await onSaved();
@@ -462,16 +570,17 @@ function ApprovalsPanel({ token, pending, onMessage, onSaved }: { token: string;
       notify(onMessage, "error", (error as Error).message);
     }
   };
-
   return (
     <section className="card">
       <h2>簽核收件匣</h2>
-      <ul>
+      <ul className="item-list">
         {pending.map((item) => (
-          <li key={`${item.type}-${item.id}`}>
-            {(item.type === "leave" ? "請假" : "加班")} | {item.reason}
-            <button onClick={() => decide(item, "approved")}>核准</button>
-            <button onClick={() => decide(item, "rejected")}>駁回</button>
+          <li className="approval-item" key={`${item.type}-${item.id}`}>
+            <span>{(item.type === "leave" ? "請假" : item.type === "overtime" ? "加班" : "忘打卡補登")} | {item.reason}</span>
+            <div className="row gap">
+              <button className="primary-btn" onClick={() => decide(item, "approved")}>核准</button>
+              <button className="danger-btn" onClick={() => decide(item, "rejected")}>駁回</button>
+            </div>
           </li>
         ))}
       </ul>
@@ -498,18 +607,21 @@ function DelegationPanel({ token, delegations, users, onMessage, onSaved }: { to
   return (
     <section className="card">
       <h2>代理人設定</h2>
-      <form className="row wrap" onSubmit={createDelegation}>
+      <form className="form-grid" onSubmit={createDelegation}>
         <select value={delegateUserId} onChange={(e) => setDelegateUserId(e.target.value)}>
           <option value="">請選擇代理人</option>
           {users.map((user) => (
             <option key={user.id} value={user.id}>{user.full_name}</option>
           ))}
         </select>
-        <input placeholder="開始日期 YYYY-MM-DD" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <input placeholder="結束日期 YYYY-MM-DD" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-        <button type="submit">儲存</button>
+        <input placeholder="開始日期 YYYY-MM-DD" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+        <input placeholder="結束日期 YYYY-MM-DD" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+        <button className="primary-btn" type="submit">儲存</button>
       </form>
-      <ul>{delegations.map((item) => <li key={item.id}>{item.delegate_user_id} ({item.start_date} - {item.end_date})</li>)}</ul>
+      <ul className="item-list">{delegations.map((item) => <li key={item.id}>{item.delegate_user_id} ({item.start_date} - {item.end_date})</li>)}</ul>
     </section>
   );
 }
+
+
+

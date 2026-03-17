@@ -3,6 +3,7 @@ import { query } from "../db/client.js";
 import { requireRole } from "../middleware/auth.js";
 import { applyLeaveApproval } from "./leave.js";
 import { applyOvertimeApproval } from "./overtime.js";
+import { applyAttendanceCorrectionDecision } from "./attendance-corrections.js";
 
 export const approvalsRouter = Router();
 
@@ -21,7 +22,24 @@ approvalsRouter.get("/pending", requireRole("employee", "admin"), async (req, re
     [req.user!.id]
   );
 
-  res.json([...leave.rows, ...overtime.rows]);
+  const corrections = await query(
+    `SELECT 'attendance_correction' AS type,
+            id,
+            user_id,
+            requested_timestamp AS start_at,
+            requested_timestamp AS end_at,
+            reason,
+            status,
+            created_at,
+            attendance_date,
+            event_type
+     FROM attendance_correction_requests
+     WHERE approver_id = $1
+       AND status = 'pending_approval'`,
+    [req.user!.id]
+  );
+
+  res.json([...leave.rows, ...overtime.rows, ...corrections.rows]);
 });
 
 approvalsRouter.post("/leave/:id/decision", requireRole("employee", "admin"), async (req, res) => {
@@ -64,4 +82,29 @@ approvalsRouter.post("/overtime/:id/decision", requireRole("employee", "admin"),
 
   await applyOvertimeApproval(req.params.id, req.user!.id, decision, comment);
   res.json({ message: "Overtime request decision recorded" });
+});
+
+approvalsRouter.post("/attendance-corrections/:id/decision", requireRole("employee", "admin"), async (req, res) => {
+  const { decision, comment } = req.body as { decision?: "approved" | "rejected"; comment?: string };
+  if (!decision) {
+    res.status(400).json({ message: "decision is required" });
+    return;
+  }
+
+  try {
+    await applyAttendanceCorrectionDecision(req.params.id, req.user!.id, decision, comment);
+  } catch (error) {
+    const code = (error as Error).message;
+    if (code === "INVALID_STATE") {
+      res.status(400).json({ message: "Correction request is not pending approval" });
+      return;
+    }
+    if (code === "FORBIDDEN") {
+      res.status(403).json({ message: "Not allowed to decide this correction request" });
+      return;
+    }
+    throw error;
+  }
+
+  res.json({ message: "Attendance correction decision recorded" });
 });

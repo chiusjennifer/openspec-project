@@ -10,6 +10,7 @@ import { leaveRouter } from "./routes/leave.js";
 import { overtimeRouter } from "./routes/overtime.js";
 import { approvalsRouter } from "./routes/approvals.js";
 import { delegationsRouter } from "./routes/delegations.js";
+import { attendanceCorrectionsRouter } from "./routes/attendance-corrections.js";
 import { requireAuth } from "./middleware/auth.js";
 
 export const app = express();
@@ -30,6 +31,7 @@ app.use("/leave-requests", leaveRouter);
 app.use("/overtime-requests", overtimeRouter);
 app.use("/approvals", approvalsRouter);
 app.use("/delegations", delegationsRouter);
+app.use("/attendance-corrections", attendanceCorrectionsRouter);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

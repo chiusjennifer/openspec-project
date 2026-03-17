@@ -42,6 +42,13 @@ async function main(): Promise<void> {
       [adminResult.rows[0].id]
     );
 
+    await pool.query(
+      `INSERT INTO attendance_correction_policies(org_key, updated_by)
+       VALUES('default', $1)
+       ON CONFLICT(org_key) DO UPDATE SET updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+      [adminResult.rows[0].id]
+    );
+
     console.log("Seed completed");
   } finally {
     await pool.end();

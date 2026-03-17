@@ -19,4 +19,9 @@ runIntegration("database integration", () => {
     const result = await pool.query("SELECT COUNT(*)::int AS count FROM roles");
     expect(result.rows[0].count).toBeGreaterThanOrEqual(0);
   });
+
+  it("can query attendance correction policy table after migrations", async () => {
+    const result = await pool.query("SELECT COUNT(*)::int AS count FROM attendance_correction_policies");
+    expect(result.rows[0].count).toBeGreaterThanOrEqual(0);
+  });
 });

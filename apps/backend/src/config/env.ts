@@ -21,6 +21,8 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional().default(""),
   SMTP_FROM: z.string().email(),
   TEMP_PASSWORD_EXPIRES_HOURS: z.coerce.number().int().positive().default(24),
+  PASSWORD_RESET_TOKEN_EXPIRES_MINUTES: z.coerce.number().int().positive().default(30),
+  FRONTEND_BASE_URL: z.string().url().default("http://localhost:5173"),
   INITIAL_ADMIN_EMAIL: z.string().email(),
   INITIAL_ADMIN_PASSWORD: z.string().min(8)
 });

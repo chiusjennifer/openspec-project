@@ -1,4 +1,13 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const runtimeDefaultApiBaseUrl =
+  typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.hostname}:4000`
+    : "http://localhost:4000";
+
+const API_BASE_URL =
+  configuredApiBaseUrl && typeof window !== "undefined"
+    ? configuredApiBaseUrl.replace("localhost", window.location.hostname)
+    : configuredApiBaseUrl || runtimeDefaultApiBaseUrl;
 
 export interface SessionUser {
   id: string;

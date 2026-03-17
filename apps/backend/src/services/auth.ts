@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import type { AuthUser } from "../types/domain.js";
@@ -28,4 +29,12 @@ export function createTemporaryPassword(): string {
     value += chars[Math.floor(Math.random() * chars.length)];
   }
   return value;
+}
+
+export function createPasswordResetToken(): string {
+  return randomBytes(32).toString("hex");
+}
+
+export function hashPasswordResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }

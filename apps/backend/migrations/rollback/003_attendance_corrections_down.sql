@@ -1,0 +1,8 @@
+DROP INDEX IF EXISTS uq_attendance_correction_pending_per_event;
+DROP INDEX IF EXISTS idx_attendance_correction_audits_request;
+DROP INDEX IF EXISTS idx_attendance_correction_requests_approver_status;
+DROP INDEX IF EXISTS idx_attendance_correction_requests_user_date_status;
+
+DROP TABLE IF EXISTS attendance_correction_audits;
+DROP TABLE IF EXISTS attendance_correction_requests;
+DROP TABLE IF EXISTS attendance_correction_policies;
